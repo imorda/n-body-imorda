@@ -7,7 +7,7 @@
 
 namespace constants {
 const double G = (6.67e-11);
-const double THETA = 0.25;
+const double THETA = 0.5;
 } // Namespace constants
 
 struct Cartesian

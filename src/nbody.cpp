@@ -237,7 +237,7 @@ Quadrant::Quadrant(Cartesian center, double length)
 }
 bool Quadrant::contains(const Cartesian & p) const
 {
-    return m_center.x - length() <= p.x && p.x <= m_center.x + length() && m_center.y - length() <= p.y && p.y <= m_center.y + length();
+    return m_center.x - length() / 2 <= p.x && p.x <= m_center.x + length() / 2 && m_center.y - length() / 2 <= p.y && p.y <= m_center.y + length() / 2;
 }
 double Quadrant::length() const
 {
@@ -245,19 +245,19 @@ double Quadrant::length() const
 }
 Quadrant Quadrant::nw() const
 {
-    return Quadrant({m_center.x - length() / 2, m_center.y - length() / 2}, length() / 2);
+    return Quadrant({m_center.x - length() / 4, m_center.y - length() / 4}, length() / 2);
 }
 Quadrant Quadrant::ne() const
 {
-    return Quadrant({m_center.x + length() / 2, m_center.y - length() / 2}, length() / 2);
+    return Quadrant({m_center.x + length() / 4, m_center.y - length() / 4}, length() / 2);
 }
 Quadrant Quadrant::sw() const
 {
-    return Quadrant({m_center.x - length() / 2, m_center.y + length() / 2}, length() / 2);
+    return Quadrant({m_center.x - length() / 4, m_center.y + length() / 4}, length() / 2);
 }
 Quadrant Quadrant::se() const
 {
-    return Quadrant({m_center.x + length() / 2, m_center.y + length() / 2}, length() / 2);
+    return Quadrant({m_center.x + length() / 4, m_center.y + length() / 4}, length() / 2);
 }
 std::ostream & operator<<(std::ostream & strm, const Quadrant & value)
 {
