@@ -10,9 +10,9 @@ int main(int argc, char ** argv)
             std::size_t time_step = std::stoull(std::string(argv[3]));
 
             FastPositionTracker tracker = FastPositionTracker(argv[1]);
-            tracker.track(tracker.bodies().front().get_m_name(), time, time_step);
+            tracker.track(tracker.bodies().front().get_name(), time, time_step);
             for (const Body & i : tracker.bodies()) {
-                std::cout << i.get_m_name() << '\t' << i.get_m_pos().x << '\t' << i.get_m_pos().y << std::endl;
+                std::cout << i.get_name() << '\t' << i.get_position().x << '\t' << i.get_position().y << std::endl;
             }
             return 0;
         }

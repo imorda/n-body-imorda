@@ -12,8 +12,8 @@ const double THETA = 0.5;
 
 struct Cartesian
 {
-    double x;
-    double y;
+    double x = 0;
+    double y = 0;
 };
 
 // Quadrant representation, required for Problem 2
@@ -27,7 +27,7 @@ public:
     // Create quadrant with center (x, y) and size 'length'
     Quadrant(Cartesian center, double length);
     // Test if point (x, y) is in the quadrant
-    bool contains(const Cartesian & p) const;
+    bool contains(Cartesian p) const;
 
     double length() const;
     // The four methods below construct new Quadrant representing sub-quadrant of the invoking quadrant
@@ -46,16 +46,16 @@ class Body
 private:
     Cartesian m_pos;
     Cartesian m_speed;
-    Cartesian m_force = {0, 0};
-    double m_mass;
+    Cartesian m_force;
+    double m_mass = 0;
     std::string m_name;
 
 public:
-    Body(const Cartesian & m_pos, const Cartesian & m_speed, double m_mass, const std::string & mName);
-    Body();
+    Body(const Cartesian & pos, const Cartesian & speed, double mass, const std::string & name);
+    Body() = default;
     double distance(const Body & b) const;
-    const Cartesian & get_m_pos() const;
-    const std::string & get_m_name() const;
+    const Cartesian & get_position() const;
+    const std::string & get_name() const;
     // calculate the force-on current body by the 'b' and add the value to accumulated force value
     void add_force(const Body & b);
     // reset accumulated force value
@@ -68,9 +68,9 @@ public:
 
     // The methods below to be done for Burnes-Hut algorithm only
     // Test if body is in quadrant
-    bool in(const Quadrant & q) const;
+    bool in(const Quadrant q) const;
     // Create new body representing center-of-m_mass of the invoking body and 'b'
-    Body plus(const Body & b) const;
+    Body plus(const Body & b);
 };
 
 using Track = std::vector<Cartesian>;
@@ -82,9 +82,10 @@ protected:
     std::vector<Body> m_bodies;
     PositionTracker(const std::string & filename);
     virtual void track_impl() = 0;
+    Track track_common(const std::string & body_name, size_t end_time, size_t time_step);
 
 public:
-    Track track(const std::string & body_name, size_t end_time, size_t time_step);
+    virtual Track track(const std::string & body_name, size_t end_time, size_t time_step) = 0;
     const std::vector<Body> & bodies();
     virtual ~PositionTracker() = default;
 };
@@ -96,6 +97,7 @@ protected:
 
 public:
     BasicPositionTracker(const std::string & filename);
+    Track track(const std::string & body_name, size_t end_time, size_t time_step) override;
 };
 
 // Burnes-Hut tree representation, required for Problem 2
@@ -107,10 +109,10 @@ protected:
 public:
     BHTreeNode(const Body & b);
     virtual ~BHTreeNode() = default;
-    const Body & get_m_representative() const;
-    virtual void insert(const Body &);
+    const Body & get_representative() const;
+    void insert(const Body &);
     // Update net acting force-on 'b'
-    virtual void update_force(Body & b);
+    void update_force(Body & b);
 
 protected:
     BHTreeNode() = default;
@@ -124,8 +126,8 @@ private:
 
 public:
     BHTreeInternal(const Quadrant & mArea);
-    void insert(const Body & b) override;
-    void update_force(Body & b) override;
+    void insert_internal(const Body & b);
+    void update_force_internal(Body & b);
 
 protected:
     bool is_far_enough(const Body & b) override;
@@ -138,4 +140,5 @@ protected:
 
 public:
     FastPositionTracker(const std::string & filename);
+    Track track(const std::string & body_name, size_t end_time, size_t time_step) override;
 };
