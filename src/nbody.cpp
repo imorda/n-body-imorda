@@ -78,13 +78,9 @@ PositionTracker::PositionTracker(const std::string & filename)
 Track PositionTracker::track_common(const std::string & body_name, size_t end_time, size_t time_step)
 {
     Track ans;
-    Body * target_body = nullptr;
-    for (std::size_t from = 0; from < m_bodies.size(); ++from) {
-        if (m_bodies[from].get_name() == body_name) {
-            target_body = &m_bodies[from];
-            ans.push_back(target_body->get_position());
-            break;
-        }
+    auto target_body = std::find_if(m_bodies.begin(), m_bodies.end(), [&body_name](const Body & body) { return body_name == body.get_name(); });
+    if (target_body == m_bodies.end()) {
+        throw std::invalid_argument(body_name + " not found");
     }
 
     for (size_t time = time_step; time <= end_time; time += time_step) {
@@ -92,9 +88,6 @@ Track PositionTracker::track_common(const std::string & body_name, size_t end_ti
 
         for (Body & i : m_bodies) {
             i.update(time_step);
-        }
-        if (target_body == nullptr) {
-            throw std::invalid_argument(body_name + " not found");
         }
         ans.push_back(target_body->get_position());
     }
@@ -129,12 +122,13 @@ FastPositionTracker::FastPositionTracker(const std::string & filename)
 }
 void FastPositionTracker::track_impl()
 {
-    std::unique_ptr<BHTreeInternal> m_root(new BHTreeInternal({{0, 0}, m_size}));
+    auto default_quadrant = Quadrant({0, 0}, m_size);
+    auto m_root = std::make_unique<BHTreeNode>(default_quadrant);
     for (const auto & i : m_bodies) {
-        m_root->insert_internal(i);
+        m_root->insert(i, default_quadrant);
     }
     for (Body & from : m_bodies) {
-        m_root->update_force_internal(from);
+        m_root->update_force(from);
     }
 }
 Track FastPositionTracker::track(const std::string & body_name, size_t end_time, size_t time_step)
@@ -148,101 +142,81 @@ BHTreeNode::BHTreeNode(const Body & b)
 }
 void BHTreeNode::update_force(Body & b)
 {
-    BHTreeInternal * this_internal = dynamic_cast<BHTreeInternal *>(this);
-    if (this_internal != nullptr) {
-        this_internal->update_force_internal(b);
-        return;
-    }
-
     if (is_far_enough(b)) {
         b.add_force(m_representative);
+    }
+    else {
+        if (m_internal_data) {
+            if (m_internal_data->nw) {
+                m_internal_data->nw->update_force(b);
+            }
+            if (m_internal_data->ne) {
+                m_internal_data->ne->update_force(b);
+            }
+            if (m_internal_data->sw) {
+                m_internal_data->sw->update_force(b);
+            }
+            if (m_internal_data->se) {
+                m_internal_data->se->update_force(b);
+            }
+        }
     }
 }
 bool BHTreeNode::is_far_enough(const Body & b)
 {
+    if (m_internal_data) {
+        return m_internal_data->area.length() / b.distance(m_representative) < constants::THETA;
+    }
     return m_representative.distance(b) > 0;
 }
-const Body & BHTreeNode::get_representative() const
+void BHTreeNode::insert(const Body & b, const Quadrant & quadrant)
 {
-    return m_representative;
-}
-void BHTreeNode::insert(const Body & b)
-{
-    BHTreeInternal * this_internal = dynamic_cast<BHTreeInternal *>(this);
-    if (this_internal != nullptr) {
-        this_internal->insert_internal(b);
-        return;
+    if (m_internal_data == nullptr) {
+        m_internal_data = std::make_unique<InternalData>(quadrant);
+        insert_impl(m_representative);
     }
-    throw std::bad_function_call{};
-}
-
-BHTreeInternal::BHTreeInternal(const Quadrant & mArea)
-    : m_area(mArea)
-{
-}
-void BHTreeInternal::insert_internal(const Body & b)
-{
     m_representative = m_representative.plus(b);
+    insert_impl(b);
+}
+void BHTreeNode::insert_impl(const Body & b)
+{
+    assert(m_internal_data);
+    assert(b.in(m_internal_data->area));
 
-    assert(b.in(m_area));
-    std::pair<std::size_t, std::size_t> target;
-    Quadrant target_subquadrant = m_area;
-    if (b.in(m_area.nw())) {
-        target = {0, 0};
-        target_subquadrant = m_area.nw();
+    Quadrant target_subquadrant;
+    std::unique_ptr<BHTreeNode> * target_child_node;
+
+    if (b.in(m_internal_data->area.nw())) {
+        target_subquadrant = m_internal_data->area.nw();
+        target_child_node = &m_internal_data->nw;
     }
-    else if (b.in(m_area.ne())) {
-        target = {1, 0};
-        target_subquadrant = m_area.ne();
+    else if (b.in(m_internal_data->area.ne())) {
+        target_subquadrant = m_internal_data->area.ne();
+        target_child_node = &m_internal_data->ne;
     }
-    else if (b.in(m_area.sw())) {
-        target = {0, 1};
-        target_subquadrant = m_area.sw();
+    else if (b.in(m_internal_data->area.sw())) {
+        target_subquadrant = m_internal_data->area.sw();
+        target_child_node = &m_internal_data->sw;
     }
-    else if (b.in(m_area.se())) {
-        target = {1, 1};
-        target_subquadrant = m_area.se();
+    else if (b.in(m_internal_data->area.se())) {
+        target_subquadrant = m_internal_data->area.se();
+        target_child_node = &m_internal_data->se;
     }
     else {
         throw std::logic_error("Body is not in any subquadrant");
     }
 
-    if (m_children[target.first][target.second] == nullptr) {
-        m_children[target.first][target.second] = std::make_unique<BHTreeNode>(b);
+    if ((*target_child_node) == nullptr) {
+        (*target_child_node) = std::make_unique<BHTreeNode>(b);
     }
     else {
-        BHTreeInternal * target_internal = dynamic_cast<BHTreeInternal *>(m_children[target.first][target.second].get());
-        if (target_internal != nullptr) {
-            target_internal->insert_internal(b);
-        }
-        else {
-            Body old_body = m_children[target.first][target.second]->get_representative();
-            m_children[target.first][target.second] = std::make_unique<BHTreeInternal>(target_subquadrant);
-            m_children[target.first][target.second]->insert(old_body);
-            m_children[target.first][target.second]->insert(b);
-        }
+        target_child_node->get()->insert(b, target_subquadrant);
     }
 }
-bool BHTreeInternal::is_far_enough(const Body & b)
+BHTreeNode::BHTreeNode(const Quadrant & q)
+    : m_internal_data(new InternalData(q))
 {
-    return m_area.length() / b.distance(m_representative) < constants::THETA;
 }
-void BHTreeInternal::update_force_internal(Body & b)
-{
-    if (is_far_enough(b)) {
-        b.add_force(m_representative);
-    }
-    else {
-        for (const auto & i : m_children) {
-            for (const auto & j : i) {
-                if (j) {
-                    j->update_force(b);
-                }
-            }
-        }
-    }
-}
-
 Quadrant::Quadrant(Cartesian center, double length)
     : m_center(center)
     , m_length(length)
@@ -275,4 +249,8 @@ Quadrant Quadrant::se() const
 std::ostream & operator<<(std::ostream & strm, const Quadrant & value)
 {
     return strm << value.m_center.x << ' ' << value.m_center.y << ' ' << value.length();
+}
+BHTreeNode::InternalData::InternalData(const Quadrant & area)
+    : area(area)
+{
 }

@@ -21,10 +21,11 @@ class Quadrant
 {
 private:
     Cartesian m_center;
-    double m_length;
+    double m_length = 0;
 
 public:
     // Create quadrant with center (x, y) and size 'length'
+    Quadrant() = default;
     Quadrant(Cartesian center, double length);
     // Test if point (x, y) is in the quadrant
     bool contains(Cartesian p) const;
@@ -103,34 +104,30 @@ public:
 // Burnes-Hut tree representation, required for Problem 2
 class BHTreeNode
 {
-protected:
+    struct InternalData
+    {
+        std::unique_ptr<BHTreeNode> ne;
+        std::unique_ptr<BHTreeNode> se;
+        std::unique_ptr<BHTreeNode> nw;
+        std::unique_ptr<BHTreeNode> sw;
+        Quadrant area;
+
+        InternalData(const Quadrant & area);
+    };
+
+    std::unique_ptr<InternalData> m_internal_data = nullptr;
     Body m_representative;
 
+    bool is_far_enough(const Body & b);
+    void insert_impl(const Body &);
+
 public:
+    BHTreeNode() = default;
     BHTreeNode(const Body & b);
-    virtual ~BHTreeNode() = default;
-    const Body & get_representative() const;
-    void insert(const Body &);
+    BHTreeNode(const Quadrant & q);
+    void insert(const Body &, const Quadrant &);
     // Update net acting force-on 'b'
     void update_force(Body & b);
-
-protected:
-    BHTreeNode() = default;
-    virtual bool is_far_enough(const Body & b);
-};
-class BHTreeInternal : public BHTreeNode
-{
-private:
-    std::array<std::array<std::unique_ptr<BHTreeNode>, 2>, 2> m_children;
-    Quadrant m_area;
-
-public:
-    BHTreeInternal(const Quadrant & mArea);
-    void insert_internal(const Body & b);
-    void update_force_internal(Body & b);
-
-protected:
-    bool is_far_enough(const Body & b) override;
 };
 
 class FastPositionTracker : public PositionTracker
